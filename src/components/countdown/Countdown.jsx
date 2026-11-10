@@ -1,34 +1,50 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
-function Countdown({ onComplete, isActive = true, resetKey = 0 }) {
-    const [count, setCount] = useState(5);
+function Countdown({ onComplete, isActive = true, resetKey = 0, from = 5 }) {
+  const [count, setCount] = useState(from);
+  const onCompleteRef = useRef(onComplete);
 
-    useEffect(() => {
-        setCount(5);
-    }, [resetKey]);
+  // Keep the latest callback without restarting the timer when the parent re-renders.
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
-    useEffect(() => {
-        if (!isActive) {
-            return undefined;
-        }
+  useEffect(() => {
+    setCount(from);
+  }, [resetKey, from]);
 
-        if (count === 0) {
-            onComplete();
-            return undefined;
-        }
+  useEffect(() => {
+    if (!isActive) {
+      return undefined;
+    }
 
-        const timer = setTimeout(() => {
-            setCount((prevCount) => prevCount - 1);
-        }, 1000);
+    if (count === 0) {
+      onCompleteRef.current();
+      return undefined;
+    }
 
-        return () => clearTimeout(timer);
-    }, [count, isActive, onComplete]);
+    const timer = setTimeout(() => {
+      setCount((prev) => prev - 1);
+    }, 1000);
 
-    return (
-        <div>
-            <h2>{isActive ? count : 0}</h2>
-        </div>
-    );
+    return () => clearTimeout(timer);
+  }, [count, isActive]);
+
+  if (!isActive) {
+    return null;
+  }
+
+  return (
+    <div className="pxr-countdown" role="timer" aria-live="assertive">
+      {count > 0 ? (
+        <span key={count} className="pxr-countdown-number">
+          {count}
+        </span>
+      ) : (
+        <span className="pxr-countdown-flash" />
+      )}
+    </div>
+  );
 }
 
 export default Countdown;

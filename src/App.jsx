@@ -5,24 +5,35 @@ import ReviewScreen from './pages/ReviewScreen';
 import GalleryScreen from './pages/GalleryScreen';
 import FinalStripScreen from './pages/FinalStripScreen';
 
-const SESSION_OPTIONS = [4, 6, 8];
+const SHOT_OPTIONS = [1, 2, 4];
 
+// view: landing | camera | review | gallery | strip
 function App() {
   const cameraRef = useRef(null);
-  const [hasStarted, setHasStarted] = useState(false);
-  const [sessionSize, setSessionSize] = useState(4);
+  const [view, setView] = useState('landing');
+  const [sessionSize, setSessionSize] = useState(SHOT_OPTIONS[0]);
+  const [sessionLocked, setSessionLocked] = useState(false);
   const [countdownResetKey, setCountdownResetKey] = useState(0);
   const [isCountdownActive, setIsCountdownActive] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [shots, setShots] = useState([]);
   const [selectedShotId, setSelectedShotId] = useState(null);
-  const [showFinalStrip, setShowFinalStrip] = useState(false);
-  const [sessionLocked, setSessionLocked] = useState(false);
 
-  const maxShots = sessionSize;
+  const maxShots = SHOT_OPTIONS.includes(sessionSize) ? sessionSize : SHOT_OPTIONS[0];
   const isSessionFull = shots.length >= maxShots;
-  const canStartNewShot = !isSessionFull || Boolean(capturedPhoto);
-  const selectedShot = shots.find((shot) => shot.id === selectedShotId) || shots[shots.length - 1] || null;
+  const selectedShot =
+    shots.find((shot) => shot.id === selectedShotId) || shots[shots.length - 1] || null;
+
+  function beginCountdown() {
+    setSessionLocked(true);
+    setIsCountdownActive(true);
+    setCountdownResetKey((prev) => prev + 1);
+  }
+
+  function stopCountdown() {
+    setIsCountdownActive(false);
+    setCountdownResetKey((prev) => prev + 1);
+  }
 
   async function handleCountdownComplete() {
     if (!cameraRef.current) {
@@ -34,14 +45,14 @@ function App() {
     if (photo) {
       setCapturedPhoto(photo);
       setIsCountdownActive(false);
+      setView('review');
     }
   }
 
   function handleRetake() {
     setCapturedPhoto(null);
-    setSessionLocked(true);
-    setIsCountdownActive(true);
-    setCountdownResetKey((prev) => prev + 1);
+    stopCountdown();
+    setView('camera');
   }
 
   function handleKeep() {
@@ -49,20 +60,13 @@ function App() {
       return;
     }
 
-    const nextShotCount = shots.length + 1;
-    const shouldAutoStart = nextShotCount < maxShots;
+    const newShot = { id: Date.now(), src: capturedPhoto };
 
-    const newShot = {
-      id: Date.now(),
-      src: capturedPhoto,
-    };
-
-    setShots((prevShots) => [...prevShots, newShot]);
+    setShots((prev) => [...prev, newShot]);
     setSelectedShotId(newShot.id);
     setCapturedPhoto(null);
-    setSessionLocked(true);
-    setIsCountdownActive(shouldAutoStart);
-    setCountdownResetKey((prev) => prev + 1);
+    stopCountdown();
+    setView('gallery');
   }
 
   function startAnotherShot() {
@@ -70,53 +74,24 @@ function App() {
       return;
     }
 
-    setSessionLocked(true);
-    setIsCountdownActive(true);
-    setCountdownResetKey((prev) => prev + 1);
+    setView('camera');
+    beginCountdown();
   }
 
-  function resetSession() {
-    setHasStarted(false);
-    setSessionLocked(false);
-    setShots([]);
+  function handleRetakeLast() {
+    setShots((prev) => prev.slice(0, -1));
     setSelectedShotId(null);
-    setCapturedPhoto(null);
-    setShowFinalStrip(false);
-    setIsCountdownActive(false);
-    setCountdownResetKey((prev) => prev + 1);
-  }
-
-  function handleRetakeLastShot() {
-    if (shots.length === 0) {
-      return;
-    }
-
-    const nextShots = shots.slice(0, -1);
-    setShots(nextShots);
-    setSelectedShotId(nextShots[nextShots.length - 1]?.id ?? null);
-    setCapturedPhoto(null);
-    setShowFinalStrip(false);
-    setSessionLocked(false);
-    setIsCountdownActive(false);
-    setCountdownResetKey((prev) => prev + 1);
+    setView('camera');
+    beginCountdown();
   }
 
   function handleRetakeAll() {
     setShots([]);
     setSelectedShotId(null);
     setCapturedPhoto(null);
-    setShowFinalStrip(false);
     setSessionLocked(false);
-    setIsCountdownActive(false);
-    setCountdownResetKey((prev) => prev + 1);
-  }
-
-  function handleProceedToFinalStrip() {
-    setShowFinalStrip(true);
-  }
-
-  function handleBackToGallery() {
-    setShowFinalStrip(false);
+    stopCountdown();
+    setView('camera');
   }
 
   function handleSessionSizeChange(event) {
@@ -124,75 +99,48 @@ function App() {
       return;
     }
 
-    const nextSize = Number(event.target.value);
-    setSessionSize(nextSize);
+    const selectedSize = Number(event.target.value);
+    setSessionSize(SHOT_OPTIONS.includes(selectedSize) ? selectedSize : SHOT_OPTIONS[0]);
     setShots([]);
     setSelectedShotId(null);
     setCapturedPhoto(null);
-    setIsCountdownActive(false);
-    setCountdownResetKey((prev) => prev + 1);
+    stopCountdown();
   }
 
   function handleStartSession() {
-    setHasStarted(true);
+    setShots([]);
+    setSelectedShotId(null);
+    setCapturedPhoto(null);
     setSessionLocked(false);
-    setShowFinalStrip(false);
-    setIsCountdownActive(false);
-    setCountdownResetKey((prev) => prev + 1);
+    stopCountdown();
+    setView('camera');
   }
 
-  function handleStartCountdown() {
-    if (!canStartNewShot) {
-      return;
-    }
-
-    setSessionLocked(true);
-    setIsCountdownActive(true);
-    setCountdownResetKey((prev) => prev + 1);
+  function handleGoToLanding() {
+    setShots([]);
+    setSelectedShotId(null);
+    setCapturedPhoto(null);
+    setSessionLocked(false);
+    stopCountdown();
+    setView('landing');
   }
 
-  if (!hasStarted) {
-    return <LandingPage onStart={handleStartSession} />;
-  }
+  switch (view) {
+    case 'landing':
+      return <LandingPage onStart={handleStartSession} />;
 
-  if (showFinalStrip) {
-    return (
-      <FinalStripScreen
-        shots={shots}
-        onBackToGallery={handleBackToGallery}
-        onRetakeLast={handleRetakeLastShot}
-        onRetakeAll={handleRetakeAll}
-      />
-    );
-  }
-
-  return (
-    <div style={{ fontFamily: 'sans-serif', textAlign: 'center', padding: '24px' }}>
-      <h1>Pixora</h1>
-
-      {capturedPhoto ? (
+    case 'review':
+      return (
         <ReviewScreen
           capturedPhoto={capturedPhoto}
           onKeep={handleKeep}
           onRetake={handleRetake}
+          onBrandClick={handleGoToLanding}
         />
-      ) : (
-        <CameraScreen
-          cameraRef={cameraRef}
-          onCountdownComplete={handleCountdownComplete}
-          countdownResetKey={countdownResetKey}
-          sessionSize={sessionSize}
-          onSessionSizeChange={handleSessionSizeChange}
-          isCountdownActive={isCountdownActive}
-          onStartCountdown={handleStartCountdown}
-          onRetakeLast={handleRetakeLastShot}
-          isSessionLocked={sessionLocked}
-          canStartNewShot={canStartNewShot}
-          isSessionFull={isSessionFull}
-        />
-      )}
+      );
 
-      {shots.length > 0 && (
+    case 'gallery':
+      return (
         <GalleryScreen
           shots={shots}
           selectedShot={selectedShot}
@@ -200,11 +148,39 @@ function App() {
           onTakeAnotherShot={startAnotherShot}
           isSessionFull={isSessionFull}
           maxShots={maxShots}
-          onResetSession={handleProceedToFinalStrip}
+          onResetSession={() => setView('strip')}
+          onBrandClick={handleGoToLanding}
         />
-      )}
-    </div>
-  );
+      );
+
+    case 'strip':
+      return (
+        <FinalStripScreen
+          shots={shots}
+          onBackToGallery={() => setView('gallery')}
+          onRetakeLast={handleRetakeLast}
+          onRetakeAll={handleRetakeAll}
+          onBrandClick={handleGoToLanding}
+        />
+      );
+
+    default:
+      return (
+        <CameraScreen
+          cameraRef={cameraRef}
+          onCountdownComplete={handleCountdownComplete}
+          countdownResetKey={countdownResetKey}
+          sessionSize={maxShots}
+          onSessionSizeChange={handleSessionSizeChange}
+          isCountdownActive={isCountdownActive}
+          onStartCountdown={beginCountdown}
+          isSessionLocked={sessionLocked}
+          shotsTaken={shots.length}
+          onBrandClick={handleGoToLanding}
+          shotOptions={SHOT_OPTIONS}
+        />
+      );
+  }
 }
 
 export default App;

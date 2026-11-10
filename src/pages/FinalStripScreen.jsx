@@ -1,61 +1,132 @@
-function FinalStripScreen({ shots, onBackToGallery, onRetakeLast, onRetakeAll }) {
-  const loadImage = (src) =>
-    new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = src;
-    });
+import { useState } from 'react';
+import PhotoboothShell from '../components/PhotoboothShell';
 
-  const drawSpacedText = (context, text, centerX, y, spacing) => {
-    const chars = text.split('');
-    const widths = chars.map((ch) => context.measureText(ch).width);
-    const totalWidth = widths.reduce((sum, w) => sum + w, 0) + spacing * (chars.length - 1);
-    let x = centerX - totalWidth / 2;
-    context.textAlign = 'left';
-    chars.forEach((ch, i) => {
-      context.fillText(ch, x, y);
-      x += widths[i] + spacing;
-    });
-    context.textAlign = 'center';
-  };
+const THEMES = [
+  { id: 'classic', label: 'Classic', paper: '#FFFFFF', mat: '#F5F3EE', caption: '#7A7468', rule: '#C4BEB0', footer: '#5B564C', swatch: '#FFFFFF', imageFilter: 'none' },
+  { id: 'noir', label: 'Noir', paper: '#171310', mat: '#2B241D', caption: '#A8A196', rule: '#5B564C', footer: '#F5F3EE', swatch: '#171310', imageFilter: 'grayscale(1) contrast(1.08)' },
+  { id: 'blush', label: 'Blush', paper: '#F9DDD8', mat: '#FDF1EE', caption: '#A9584A', rule: '#D9A79D', footer: '#8A3B2E', swatch: '#F4B8AE', imageFilter: 'none' },
+  { id: 'film', label: 'Maroon', paper: '#762636', mat: '#F3E4DC', caption: '#762636', rule: '#C88A96', footer: '#FFFFFF', swatch: '#762636', imageFilter: 'none' },
+  { id: 'sage', label: 'Sage', paper: '#DCE5D8', mat: '#F0F5EE', caption: '#5F7A5A', rule: '#A9BEA3', footer: '#3F5B3A', swatch: '#A9BEA3', imageFilter: 'none' },
+];
+
+const pad = (n) => String(n).padStart(2, '0');
+
+const STRIP_LAYOUT = {
+  width: 300,
+  padding: 14,
+  framePaddingTop: 6,
+  framePaddingX: 6,
+  rowGap: 10,
+  captionPaddingTop: 5,
+  captionPaddingBottom: 6,
+  captionFontSize: 10,
+  captionLineHeight: 12,
+  footerMarginTop: 2,
+  footerPaddingTop: 10,
+  footerFontSize: 10,
+  footerLineHeight: 12,
+};
+
+const loadImage = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+
+function drawSpacedText(context, text, centerX, y, spacing) {
+  const chars = text.split('');
+  const widths = chars.map((ch) => context.measureText(ch).width);
+  const totalWidth = widths.reduce((sum, w) => sum + w, 0) + spacing * (chars.length - 1);
+  let x = centerX - totalWidth / 2;
+  context.textAlign = 'left';
+  chars.forEach((ch, i) => {
+    context.fillText(ch, x, y);
+    x += widths[i] + spacing;
+  });
+  context.textAlign = 'center';
+}
+
+function FinalStripScreen({ shots, onBackToGallery, onRetakeLast, onRetakeAll, onBrandClick }) {
+  const [themeId, setThemeId] = useState(THEMES[0].id);
+  const theme = THEMES.find((t) => t.id === themeId) || THEMES[0];
 
   const handleDownloadPng = async () => {
-    const stripWidth = 300;
-    const padding = 20;
-    const imageWidth = stripWidth - padding * 2;
+    const scale = 2;
+    const stripWidth = STRIP_LAYOUT.width;
+    const padding = STRIP_LAYOUT.padding;
+    const frameWidth = stripWidth - padding * 2;
+    const imageWidth = frameWidth - STRIP_LAYOUT.framePaddingX * 2;
     const imageHeight = Math.round((imageWidth * 3) / 4);
-    const captionHeight = 26;
-    const spacing = 14;
-    const rowHeight = imageHeight + captionHeight + spacing;
-    const footerHeight = 44;
+    const frameHeight =
+      STRIP_LAYOUT.framePaddingTop
+      + imageHeight
+      + STRIP_LAYOUT.captionPaddingTop
+      + STRIP_LAYOUT.captionLineHeight
+      + STRIP_LAYOUT.captionPaddingBottom;
+    const rowHeight = frameHeight + STRIP_LAYOUT.rowGap;
+    const footerHeight =
+      STRIP_LAYOUT.footerMarginTop
+      + STRIP_LAYOUT.footerPaddingTop
+      + 1
+      + STRIP_LAYOUT.footerLineHeight;
+    const stripHeight =
+      padding * 2
+      + shots.length * frameHeight
+      + shots.length * STRIP_LAYOUT.rowGap
+      + footerHeight;
 
     const canvas = document.createElement('canvas');
-    canvas.width = stripWidth;
-    canvas.height = padding * 2 + shots.length * rowHeight + footerHeight;
+    canvas.width = stripWidth * scale;
+    canvas.height = stripHeight * scale;
     const context = canvas.getContext('2d');
+    context.scale(scale, scale);
 
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = theme.paper;
+    context.fillRect(0, 0, stripWidth, stripHeight);
 
     try {
       const images = await Promise.all(shots.map((shot) => loadImage(shot.src)));
 
       images.forEach((img, index) => {
-        const y = padding + index * rowHeight;
+        const frameY = padding + index * rowHeight;
+        const imageX = padding + STRIP_LAYOUT.framePaddingX;
+        const imageY = frameY + STRIP_LAYOUT.framePaddingTop;
 
-        context.fillStyle = '#f5f3ee';
-        context.fillRect(padding - 6, y - 6, imageWidth + 12, imageHeight + 12);
-        context.drawImage(img, padding, y, imageWidth, imageHeight);
+        context.fillStyle = theme.mat;
+        context.fillRect(padding, frameY, frameWidth, frameHeight);
 
-        context.fillStyle = '#7a7468';
-        context.font = '11px monospace';
+        // Cover-fit each photo into the 4:3 slot.
+        const sourceRatio = img.width / img.height;
+        const slotRatio = imageWidth / imageHeight;
+        let sx = 0;
+        let sy = 0;
+        let sw = img.width;
+        let sh = img.height;
+        if (sourceRatio > slotRatio) {
+          sw = img.height * slotRatio;
+          sx = (img.width - sw) / 2;
+        } else {
+          sh = img.width / slotRatio;
+          sy = (img.height - sh) / 2;
+        }
+        context.filter = theme.imageFilter;
+        context.drawImage(img, sx, sy, sw, sh, imageX, imageY, imageWidth, imageHeight);
+        context.filter = 'none';
+
+        context.fillStyle = theme.caption;
+        context.font = `${STRIP_LAYOUT.captionFontSize}px monospace`;
         context.textAlign = 'center';
-        context.fillText(String(index + 1).padStart(2, '0'), stripWidth / 2, y + imageHeight + 18);
+        context.fillText(
+          pad(index + 1),
+          stripWidth / 2,
+          imageY + imageHeight + STRIP_LAYOUT.captionPaddingTop + STRIP_LAYOUT.captionFontSize,
+        );
       });
 
-      const footerY = padding + shots.length * rowHeight;
-      context.strokeStyle = '#c4beb0';
+      const footerY = padding + shots.length * rowHeight + STRIP_LAYOUT.footerMarginTop;
+      context.strokeStyle = theme.rule;
       context.lineWidth = 1;
       context.setLineDash([4, 4]);
       context.beginPath();
@@ -64,12 +135,24 @@ function FinalStripScreen({ shots, onBackToGallery, onRetakeLast, onRetakeAll })
       context.stroke();
       context.setLineDash([]);
 
-      context.fillStyle = '#5b564c';
-      context.font = 'bold 12px monospace';
-      drawSpacedText(context, 'PIXORA', stripWidth / 2, footerY + 26, 2.5);
+      context.fillStyle = theme.footer;
+      context.font = `500 ${STRIP_LAYOUT.footerFontSize}px monospace`;
+      drawSpacedText(
+        context,
+        'PIXORA',
+        stripWidth / 2,
+        footerY + STRIP_LAYOUT.footerPaddingTop + 1 + STRIP_LAYOUT.footerFontSize,
+        1.4,
+      );
 
+      const now = new Date();
+      const dateStamp = [
+        now.getFullYear(),
+        pad(now.getMonth() + 1),
+        pad(now.getDate()),
+      ].join('-');
       const link = document.createElement('a');
-      link.download = 'pixora-strip.png';
+      link.download = `pixora-strip-${dateStamp}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     } catch (error) {
@@ -77,217 +160,85 @@ function FinalStripScreen({ shots, onBackToGallery, onRetakeLast, onRetakeAll })
     }
   };
 
+  const stripVars = {
+    '--n': shots.length,
+    '--strip-padding': `${STRIP_LAYOUT.padding}px`,
+    '--strip-frame-padding': `${STRIP_LAYOUT.framePaddingTop}px ${STRIP_LAYOUT.framePaddingX}px 0`,
+    '--strip-gap': `${STRIP_LAYOUT.rowGap}px`,
+    '--strip-caption-padding': `${STRIP_LAYOUT.captionPaddingTop}px 0 ${STRIP_LAYOUT.captionPaddingBottom}px`,
+    '--strip-caption-font-size': `${STRIP_LAYOUT.captionFontSize}px`,
+    '--strip-caption-line-height': `${STRIP_LAYOUT.captionLineHeight}px`,
+    '--strip-footer-margin-top': `${STRIP_LAYOUT.footerMarginTop}px`,
+    '--strip-footer-padding-top': `${STRIP_LAYOUT.footerPaddingTop}px`,
+    '--strip-footer-font-size': `${STRIP_LAYOUT.footerFontSize}px`,
+    '--strip-footer-line-height': `${STRIP_LAYOUT.footerLineHeight}px`,
+    '--strip-paper': theme.paper,
+    '--strip-mat': theme.mat,
+    '--strip-caption': theme.caption,
+    '--strip-rule': theme.rule,
+    '--strip-footer': theme.footer,
+  };
+
   return (
-    <div style={styles.page}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,340..600&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
-        .pxr-sprockets {
-          display: flex;
-          justify-content: space-between;
-          padding: 0 24px;
-        }
-        .pxr-sprockets span {
-          width: 6px;
-          height: 10px;
-          border-radius: 2px;
-          background: #D8D3C7;
-        }
-
-        .pxr-strip {
-          background: #FFFFFF;
-          padding: 12px;
-          box-shadow: 0 20px 44px rgba(23, 19, 16, 0.16);
-          border-radius: 2px;
-          width: min(300px, 76vw);
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-        .pxr-strip-frame {
-          background: #f5f3ee;
-          padding: 10px 10px 8px;
-        }
-        .pxr-strip-frame img {
-          display: block;
-          width: 100%;
-          aspect-ratio: 4 / 3;
-          object-fit: cover;
-          background: #EDEAE3;
-        }
-        .pxr-strip-caption {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 9px;
-          letter-spacing: 0.1em;
-          color: #7A7468;
-          text-align: center;
-          margin: 6px 0 0;
-        }
-        .pxr-strip-footer {
-          font-family: 'IBM Plex Mono', monospace;
-          font-weight: 500;
-          font-size: 9px;
-          letter-spacing: 0.14em;
-          color: #5B564C;
-          text-align: center;
-          margin: 2px 0 0;
-          padding-top: 10px;
-          border-top: 1px dashed #C4BEB0;
-        }
-
-        .pxr-btn-primary {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 13px;
-          letter-spacing: 0.06em;
-          padding: 13px 28px;
-          border-radius: 999px;
-          border: none;
-          background: #171310;
-          color: #FFFFFF;
-          cursor: pointer;
-          transition: background 160ms ease, transform 160ms ease;
-        }
-        .pxr-btn-primary:hover {
-          background: #2B241D;
-        }
-        .pxr-btn-primary:active {
-          transform: scale(0.97);
-        }
-        .pxr-btn-primary:focus-visible {
-          outline: 2px solid #D6472C;
-          outline-offset: 2px;
-        }
-
-        .pxr-btn-secondary {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 13px;
-          letter-spacing: 0.06em;
-          padding: 13px 28px;
-          border-radius: 999px;
-          border: 1px solid #D8D3C7;
-          background: #FFFFFF;
-          color: #171310;
-          cursor: pointer;
-          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
-        }
-        .pxr-btn-secondary:hover {
-          border-color: #171310;
-        }
-        .pxr-btn-secondary:active {
-          transform: scale(0.97);
-        }
-      `}</style>
-
-      <div className="pxr-sprockets" aria-hidden="true">
-        {Array.from({ length: 14 }).map((_, i) => (
-          <span key={`t-${i}`} />
-        ))}
-      </div>
-
-      <div style={styles.corners}>
-        <span style={styles.brandMark}>PIXORA</span>
-        <span style={styles.exif}>STRIP OF {shots.length}</span>
-      </div>
-      <div style={styles.divider} />
-
-      <main style={styles.content}>
-        <span style={styles.eyebrow}>FINAL PREVIEW</span>
-        <h2 style={styles.title}>Your Pixora strip</h2>
-
-        <div className="pxr-strip">
+    <PhotoboothShell readout={`STRIP OF ${shots.length}`} onBrandClick={onBrandClick}>
+      <div className="pxr-stage">
+        <div className="pxr-strip" style={stripVars}>
           {shots.map((shot, index) => (
-            <div key={shot.id} className="pxr-strip-frame">
-              <img src={shot.src} alt={`Final shot ${index + 1}`} />
-              <p className="pxr-strip-caption">
-                {String(index + 1).padStart(2, '0')}
-              </p>
-            </div>
+            <figure key={shot.id} className="pxr-strip-frame">
+              <img
+                src={shot.src}
+                alt={`Final shot ${index + 1}`}
+                style={{ filter: theme.imageFilter }}
+              />
+              <figcaption className="pxr-strip-caption">{pad(index + 1)}</figcaption>
+            </figure>
           ))}
           <p className="pxr-strip-footer">PIXORA</p>
         </div>
 
-        <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button type="button" className="pxr-btn-secondary" onClick={onBackToGallery}>
-            Back to gallery
-          </button>
-          <button type="button" className="pxr-btn-secondary" onClick={onRetakeLast}>
-            Retake last
-          </button>
-          <button type="button" className="pxr-btn-secondary" onClick={onRetakeAll}>
-            Retake all
-          </button>
-          <button type="button" className="pxr-btn-primary" onClick={handleDownloadPng}>
-            Download PNG
-          </button>
-        </div>
-      </main>
+        <div className="pxr-panel">
+          <div className="pxr-heading">
+            <span className="pxr-eyebrow">Final preview</span>
+            <h1 className="pxr-title">Your Pixora strip</h1>
+          </div>
 
-      <div className="pxr-sprockets" aria-hidden="true">
-        {Array.from({ length: 14 }).map((_, i) => (
-          <span key={`b-${i}`} />
-        ))}
+          <div className="pxr-heading">
+            <div className="pxr-swatches" role="radiogroup" aria-label="Strip theme">
+              {THEMES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={option.id === themeId}
+                  aria-label={`${option.label} theme`}
+                  title={option.label}
+                  className="pxr-swatch"
+                  style={{ background: option.swatch }}
+                  onClick={() => setThemeId(option.id)}
+                />
+              ))}
+            </div>
+            <p className="pxr-note">Theme · {theme.label}</p>
+          </div>
+
+          <div className="pxr-stack">
+            <button type="button" className="pxr-btn pxr-btn--primary" onClick={handleDownloadPng}>
+              Download PNG
+            </button>
+            <button type="button" className="pxr-btn pxr-btn--ghost" onClick={onBackToGallery}>
+              Back to shots
+            </button>
+            <button type="button" className="pxr-btn pxr-btn--ghost" onClick={onRetakeLast}>
+              Retake last
+            </button>
+            <button type="button" className="pxr-btn pxr-btn--ghost" onClick={onRetakeAll}>
+              Retake all
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+    </PhotoboothShell>
   );
 }
-
-const styles = {
-  page: {
-    minHeight: '100vh',
-    width: '100%',
-    background: '#FFFFFF',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    padding: '28px 0',
-    boxSizing: 'border-box',
-  },
-  corners: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '20px 28px 16px',
-  },
-  divider: {
-    height: 1,
-    background: '#ECE9E1',
-    margin: '0 28px',
-  },
-  brandMark: {
-    fontFamily: "'IBM Plex Mono', monospace",
-    fontSize: 12,
-    letterSpacing: '0.14em',
-    color: '#171310',
-  },
-  exif: {
-    fontFamily: "'IBM Plex Mono', monospace",
-    fontSize: 11,
-    letterSpacing: '0.08em',
-    color: '#9A9488',
-  },
-  content: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '24px 24px 8px',
-  },
-  eyebrow: {
-    fontFamily: "'IBM Plex Mono', monospace",
-    fontSize: 11,
-    letterSpacing: '0.16em',
-    color: '#D6472C',
-    marginBottom: 8,
-  },
-  title: {
-    fontFamily: "'Fraunces', serif",
-    fontOpticalSizing: 'auto',
-    fontWeight: 480,
-    fontSize: 'clamp(26px, 4vw, 36px)',
-    color: '#171310',
-    margin: '0 0 24px',
-  },
-};
 
 export default FinalStripScreen;
