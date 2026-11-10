@@ -2,11 +2,11 @@ import { useState } from 'react';
 import PhotoboothShell from '../components/PhotoboothShell';
 
 const THEMES = [
-  { id: 'classic', label: 'Classic', paper: '#FFFFFF', mat: '#F5F3EE', caption: '#7A7468', rule: '#C4BEB0', footer: '#5B564C', swatch: '#FFFFFF', imageFilter: 'none' },
-  { id: 'noir', label: 'Noir', paper: '#171310', mat: '#2B241D', caption: '#A8A196', rule: '#5B564C', footer: '#F5F3EE', swatch: '#171310', imageFilter: 'grayscale(1) contrast(1.08)' },
-  { id: 'blush', label: 'Blush', paper: '#F9DDD8', mat: '#FDF1EE', caption: '#A9584A', rule: '#D9A79D', footer: '#8A3B2E', swatch: '#F4B8AE', imageFilter: 'none' },
-  { id: 'film', label: 'Maroon', paper: '#762636', mat: '#F3E4DC', caption: '#762636', rule: '#C88A96', footer: '#FFFFFF', swatch: '#762636', imageFilter: 'none' },
-  { id: 'sage', label: 'Sage', paper: '#DCE5D8', mat: '#F0F5EE', caption: '#5F7A5A', rule: '#A9BEA3', footer: '#3F5B3A', swatch: '#A9BEA3', imageFilter: 'none' },
+  { id: 'classic', label: 'Classic', paper: '#FFFFFF', mat: '#F5F3EE', caption: '#7A7468', rule: '#C4BEB0', footer: '#5B564C', swatch: '#FFFFFF', imageFilter: 'none', exportFilter: 'none' },
+  { id: 'noir', label: 'Noir', paper: '#171310', mat: '#2B241D', caption: '#A8A196', rule: '#5B564C', footer: '#F5F3EE', swatch: '#171310', imageFilter: 'grayscale(1) contrast(1.08)', exportFilter: 'noir' },
+  { id: 'blush', label: 'Blush', paper: '#F9DDD8', mat: '#FDF1EE', caption: '#A9584A', rule: '#D9A79D', footer: '#8A3B2E', swatch: '#F4B8AE', imageFilter: 'none', exportFilter: 'none' },
+  { id: 'film', label: 'Maroon', paper: '#762636', mat: '#F3E4DC', caption: '#762636', rule: '#C88A96', footer: '#FFFFFF', swatch: '#762636', imageFilter: 'none', exportFilter: 'none' },
+  { id: 'sage', label: 'Sage', paper: '#DCE5D8', mat: '#F0F5EE', caption: '#5F7A5A', rule: '#A9BEA3', footer: '#3F5B3A', swatch: '#A9BEA3', imageFilter: 'none', exportFilter: 'none' },
 ];
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -48,11 +48,80 @@ function drawSpacedText(context, text, centerX, y, spacing) {
   context.textAlign = 'center';
 }
 
+function drawExportImage(context, img, source, destination, filter) {
+  if (filter === 'none') {
+    context.drawImage(
+      img,
+      source.x,
+      source.y,
+      source.width,
+      source.height,
+      destination.x,
+      destination.y,
+      destination.width,
+      destination.height,
+    );
+    return;
+  }
+
+  const filteredCanvas = document.createElement('canvas');
+  filteredCanvas.width = destination.width * 2;
+  filteredCanvas.height = destination.height * 2;
+  const filteredContext = filteredCanvas.getContext('2d', { willReadFrequently: true });
+
+  if (!filteredContext) {
+    throw new Error('Image filter processing is unavailable in this browser.');
+  }
+
+  filteredContext.drawImage(
+    img,
+    source.x,
+    source.y,
+    source.width,
+    source.height,
+    0,
+    0,
+    filteredCanvas.width,
+    filteredCanvas.height,
+  );
+
+  const imageData = filteredContext.getImageData(
+    0,
+    0,
+    filteredCanvas.width,
+    filteredCanvas.height,
+  );
+  const contrastFactor = 1.08;
+
+  for (let index = 0; index < imageData.data.length; index += 4) {
+    const grayscale =
+      imageData.data[index] * 0.299
+      + imageData.data[index + 1] * 0.587
+      + imageData.data[index + 2] * 0.114;
+    const contrasted = Math.max(0, Math.min(255, (grayscale - 128) * contrastFactor + 128));
+    imageData.data[index] = contrasted;
+    imageData.data[index + 1] = contrasted;
+    imageData.data[index + 2] = contrasted;
+  }
+
+  filteredContext.putImageData(imageData, 0, 0);
+  context.drawImage(filteredCanvas, destination.x, destination.y, destination.width, destination.height);
+}
+
 function FinalStripScreen({ shots, onBackToGallery, onRetakeLast, onRetakeAll, onBrandClick }) {
   const [themeId, setThemeId] = useState(THEMES[0].id);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   const theme = THEMES.find((t) => t.id === themeId) || THEMES[0];
 
   const handleDownloadPng = async () => {
+    if (isExporting) {
+      return;
+    }
+
+    setIsExporting(true);
+    setExportError('');
+
     const scale = 2;
     const stripWidth = STRIP_LAYOUT.width;
     const padding = STRIP_LAYOUT.padding;
@@ -81,12 +150,16 @@ function FinalStripScreen({ shots, onBackToGallery, onRetakeLast, onRetakeAll, o
     canvas.width = stripWidth * scale;
     canvas.height = stripHeight * scale;
     const context = canvas.getContext('2d');
-    context.scale(scale, scale);
-
-    context.fillStyle = theme.paper;
-    context.fillRect(0, 0, stripWidth, stripHeight);
 
     try {
+      if (!context) {
+        throw new Error('Canvas export is unavailable in this browser.');
+      }
+
+      context.scale(scale, scale);
+      context.fillStyle = theme.paper;
+      context.fillRect(0, 0, stripWidth, stripHeight);
+
       const images = await Promise.all(shots.map((shot) => loadImage(shot.src)));
 
       images.forEach((img, index) => {
@@ -111,9 +184,13 @@ function FinalStripScreen({ shots, onBackToGallery, onRetakeLast, onRetakeAll, o
           sh = img.width / slotRatio;
           sy = (img.height - sh) / 2;
         }
-        context.filter = theme.imageFilter;
-        context.drawImage(img, sx, sy, sw, sh, imageX, imageY, imageWidth, imageHeight);
-        context.filter = 'none';
+        drawExportImage(
+          context,
+          img,
+          { x: sx, y: sy, width: sw, height: sh },
+          { x: imageX, y: imageY, width: imageWidth, height: imageHeight },
+          theme.exportFilter,
+        );
 
         context.fillStyle = theme.caption;
         context.font = `${STRIP_LAYOUT.captionFontSize}px monospace`;
@@ -151,12 +228,43 @@ function FinalStripScreen({ shots, onBackToGallery, onRetakeLast, onRetakeAll, o
         pad(now.getMonth() + 1),
         pad(now.getDate()),
       ].join('-');
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((result) => {
+          if (result) {
+            resolve(result);
+          } else {
+            reject(new Error('The browser could not create the strip image.'));
+          }
+        }, 'image/png');
+      });
+      const filename = `pixora-strip-${dateStamp}.png`;
+      const file = new File([blob], filename, { type: 'image/png' });
+      const canShareFile = typeof navigator.share === 'function'
+        && typeof navigator.canShare === 'function'
+        && navigator.canShare({ files: [file] });
+
+      if (canShareFile) {
+        await navigator.share({
+          files: [file],
+          title: 'Pixora photo strip',
+        });
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.download = `pixora-strip-${dateStamp}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.download = filename;
+      link.href = objectUrl;
       link.click();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch (error) {
-      console.error('Failed to generate strip image:', error);
+      if (error?.name !== 'AbortError') {
+        console.error('Failed to export strip image:', error);
+        setExportError('Could not export the strip. Please try again.');
+      }
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -222,9 +330,15 @@ function FinalStripScreen({ shots, onBackToGallery, onRetakeLast, onRetakeAll, o
           </div>
 
           <div className="pxr-stack">
-            <button type="button" className="pxr-btn pxr-btn--primary" onClick={handleDownloadPng}>
-              Download PNG
+            <button
+              type="button"
+              className="pxr-btn pxr-btn--primary"
+              onClick={handleDownloadPng}
+              disabled={isExporting}
+            >
+              {isExporting ? 'Preparing strip…' : 'Save strip'}
             </button>
+            {exportError && <p className="pxr-error" role="alert">{exportError}</p>}
             <button type="button" className="pxr-btn pxr-btn--ghost" onClick={onBackToGallery}>
               Back to shots
             </button>

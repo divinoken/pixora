@@ -165,11 +165,11 @@ The strip:
 
 Theme controls use radio semantics and update the preview immediately.
 
-The Noir theme also applies a monochrome filter to photos in the final strip preview. The same filter is baked into the downloaded PNG; review previews, gallery shots, and stored photos remain unchanged.
+The Noir theme also applies a monochrome filter to photos in the final strip preview. The same filter is baked into the downloaded PNG using explicit canvas pixel processing for mobile browser compatibility; review previews, gallery shots, and stored photos remain unchanged.
 
 ### 2.10 Download
 
-The final strip can be exported as a PNG using a canvas. Images are cover-fitted into the strip slots and rendered at 2× scale for improved output quality. The export mirrors the final preview's outer padding, image frame borders, row gaps, caption spacing, and footer placement.
+The final strip can be exported as a PNG using a canvas. Images are cover-fitted into the strip slots and rendered at 2× scale for improved output quality. The export mirrors the final preview's outer padding, image frame borders, row gaps, caption spacing, and footer placement. On mobile browsers that support file sharing, Save strip opens the native share sheet so the user can choose Photos/library; other browsers use the standard file download fallback.
 
 Downloads use the local date in this format:
 
